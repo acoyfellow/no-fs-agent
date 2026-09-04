@@ -1,0 +1,39 @@
+README.md
+  s_99b55ecf7d26fa::t_3ea53331aa18cc 7-8,56-57
+proof/run-greetall-same-name.json
+  s_a22615f23a4e42::t_3be18a3648be0c 1
+proof/run-misleading-fixture.json
+  s_a22615f23a4e42::t_e341e2bbfe240e 1
+proof/run-verifier-sensitivity-round0-attempt1-unknown-shape.json
+  s_a22615f23a4e42::t_92a9ac048774a8 1
+proof/run-verifier-sensitivity-round0-attempt2-unknown-shape.json
+  s_a22615f23a4e42::t_4ba1088d2b5339 1
+proof/run-verifier-sensitivity-round0.json
+  s_a22615f23a4e42::t_aae07b086816ef 1
+proof/run-verifier-sensitivity.json
+  s_a22615f23a4e42::t_d9e700158ff748 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6697a7ee67b1c014c55e87b8139ff151d662a238",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    },
+    "s_a22615f23a4e42": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a04e55-f85f-7675-a279-2b25f324188f",
+        "model": "kimi-k3"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
