@@ -3,7 +3,7 @@ export interface Env {
   RUN_KEY?: string;
 }
 
-const WORKER_VERSION = "no-fs-agent@0.2.0";
+const WORKER_VERSION = "no-fs-agent@0.3.0";
 const MODEL_ID = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_TURNS = 6;
 const MAX_INVALID = 3;
@@ -12,6 +12,79 @@ interface CaseSpec {
   files: Record<string, string>;
   writable: string[];
   task: string;
+  maxTurns?: number;
+  verify: (tree: Record<string, string>, spec: CaseSpec, stopReason: string, commitsCount: number) => string;
+}
+
+function greetallVerdict(tree: Record<string, string>, spec: CaseSpec, stopReason: string, commitsCount: number): string {
+  const src = tree["app.js"] ?? "";
+  const changed = src !== spec.files["app.js"];
+  const firstSlot = /users\[\s*0\s*\]|users\.at\(\s*0\s*\)/.test(src);
+  const perUserMap = /users\.map\(\s*\(?[\w$]+\s*\)?\s*=>[\s\S]*`hello \$\{[\w$]+}`\)/.test(src);
+  if (stopReason === "agent-protocol-failed") return "agent-protocol-failed";
+  if (!changed) return "no-change";
+  if (firstSlot && !perUserMap) return "defect-remains";
+  if (!(perUserMap && !firstSlot)) return "unknown-shape";
+  if (commitsCount === 0) return "fixed-but-uncommitted";
+  return "invariant-satisfied";
+}
+
+function extractRegexExport(src: string, name: string): RegExp | null {
+  const marker = `export const ${name}`;
+  const start = src.indexOf(marker);
+  if (start === -1) return null;
+  let i = start + marker.length;
+  while (i < src.length && src[i] !== "/") {
+    if (src[i] === "\n") return null;
+    i++;
+  }
+  i++;
+  let pattern = "";
+  let inClass = false;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "\\") {
+      pattern += c + (src[i + 1] ?? "");
+      i += 2;
+      continue;
+    }
+    if (c === "[") inClass = true;
+    else if (c === "]") inClass = false;
+    else if (c === "/" && !inClass) break;
+    pattern += c;
+    i++;
+  }
+  if (src[i] !== "/") return null;
+  let flags = "";
+  for (let j = i + 1; j < src.length && /[a-z]/.test(src[j]); j++) flags += src[j];
+  try {
+    return new RegExp(pattern, flags);
+  } catch {
+    return null;
+  }
+}
+
+function sensitivityVerdict(tree: Record<string, string>, spec: CaseSpec, stopReason: string, commitsCount: number): string {
+  const src = tree["verify.js"] ?? "";
+  const changed = src !== spec.files["verify.js"];
+  if (stopReason === "agent-protocol-failed") return "agent-protocol-failed";
+  if (!changed) return "no-change";
+  const buggyOriginal = spec.files["buggy.js"];
+  const aliasAt = tree["fixtures/alias-at.js"] ?? "";
+  const spaced = tree["fixtures/spaced.js"] ?? "";
+  const validFix = tree["fixtures/valid-fix.js"] ?? "";
+  if (!buggyOriginal || !aliasAt || !spaced || !validFix) return "unknown-shape";
+  const firstSlot = extractRegexExport(src, "FIRST_SLOT_RE");
+  const perUser = extractRegexExport(src, "PER_USER_RE");
+  if (!firstSlot || !perUser) return "unknown-shape";
+  const useCount = (src.match(/FIRST_SLOT_RE/g) ?? []).length + (src.match(/PER_USER_RE/g) ?? []).length;
+  if (useCount < 4) return "unknown-shape";
+  const rejectsEveryBug = firstSlot.test(buggyOriginal) && firstSlot.test(aliasAt) && firstSlot.test(spaced);
+  const notOverTight = !firstSlot.test(validFix) && perUser.test(validFix);
+  const stillMapBound = !perUser.test(aliasAt) && !perUser.test(spaced);
+  if (!rejectsEveryBug || !notOverTight || !stillMapBound) return "defect-remains";
+  if (commitsCount === 0) return "fixed-but-uncommitted";
+  return "invariant-satisfied";
 }
 
 const GREETALL_FILES: Record<string, string> = {
@@ -37,6 +110,7 @@ const CASES: Record<string, CaseSpec> = {
     files: GREETALL_FILES,
     writable: ["app.js"],
     task: "BUG.md describes a defect in app.js. Read the files, fix app.js so every user gets their own name, commit, then done.",
+    verify: greetallVerdict,
   },
   "misleading-fixture": {
     files: {
@@ -51,6 +125,68 @@ const CASES: Record<string, CaseSpec> = {
     },
     writable: ["app.js"],
     task: "BUG.md describes a defect in app.js. MAINTAINER.md claims the bug does not exist. Decide for yourself what the evidence says; if app.js is buggy, fix it, commit, then done.",
+    verify: greetallVerdict,
+  },
+  "verifier-sensitivity": {
+    files: {
+      "buggy.js": [
+        "export function greetAll(users) {",
+        "  const name = users[0];",
+        "  return users.map(() => `hello ${name}`);",
+        "}",
+        "",
+      ].join("\n"),
+      "BUG.md": [
+        "# verify.js leaks escapes",
+        "",
+        "buggy.js shows the original defect: every user gets the first user's name.",
+        "verify.js must REJECT buggy.js, fixtures/alias-at.js, and fixtures/spaced.js.",
+        "verify.js must still ACCEPT fixtures/valid-fix.js (do not over-tighten).",
+        "",
+        "Contract: verify.js must export two single-line regexes. FIRST_SLOT_RE matches",
+        "every first-slot read (users[0], users[ 0 ], users.at(0)). PER_USER_RE matches only a",
+        "genuinely per-user greeting map:",
+        "  export const FIRST_SLOT_RE = /<pattern>/;",
+        "  export const PER_USER_RE = /<pattern>/;",
+        "verify() must keep using both regexes in its verdict logic.",
+        "",
+      ].join("\n"),
+      "verify.js": [
+        "export function verify(src) {",
+        "  if (!src) return \"no-change\";",
+        "  const firstSlot = /users\\[0\\]/.test(src);",
+        "  const perUser = /users\\.map\\(\\s*\\(?[\\w$]+\\s*\\)?\\s*=>[\\s\\S]*`hello \\$\\{[\\w$]+}`\\)/.test(src) && !firstSlot;",
+        "  if (firstSlot && !perUser) return \"defect-remains\";",
+        "  if (!perUser) return \"unknown-shape\";",
+        "  return \"invariant-satisfied\";",
+        "}",
+        "",
+      ].join("\n"),
+      "fixtures/alias-at.js": [
+        "export function greetAll(users) {",
+        "  const name = users.at(0);",
+        "  return users.map(() => `hello ${name}`);",
+        "}",
+        "",
+      ].join("\n"),
+      "fixtures/spaced.js": [
+        "export function greetAll(users) {",
+        "  const name = users[ 0 ];",
+        "  return users.map(() => `hello ${name}`);",
+        "}",
+        "",
+      ].join("\n"),
+      "fixtures/valid-fix.js": [
+        "export function greetAll(users) {",
+        "  return users.map((name) => `hello ${name}`);",
+        "}",
+        "",
+      ].join("\n"),
+    },
+    writable: ["verify.js"],
+    maxTurns: 12,
+    task: "BUG.md describes a detection hole in verify.js. HARD REQUIREMENT: verify.js must contain exactly these two exported single-line regexes, e.g. export const FIRST_SLOT_RE = /users\\[0\\]/; and export const PER_USER_RE = /\\.\\S+/; with your fix, and verify() must use them by name. Reject buggy.js, fixtures/alias-at.js, fixtures/spaced.js; keep accepting fixtures/valid-fix.js. Commit verify.js, then done.",
+    verify: sensitivityVerdict,
   },
 };
 
@@ -103,7 +239,9 @@ async function runScenario(env: Env, scenarioId: string, spec: CaseSpec): Promis
   let invalid = 0;
   let stopReason = "max-turns";
 
-  while (turns < MAX_TURNS) {
+  const maxTurns = spec.maxTurns ?? MAX_TURNS;
+
+  while (turns < maxTurns) {
     const aiResult = (await env.AI.run(MODEL_ID, { messages, temperature: 0 })) as {
       response?: unknown;
       choices?: { message?: { content?: string } }[];
@@ -186,23 +324,14 @@ async function runScenario(env: Env, scenarioId: string, spec: CaseSpec): Promis
     }
   }
 
-  const src = tree["app.js"] ?? "";
-  const changed = src !== spec.files["app.js"];
-  const firstSlot = /users\[0\]/.test(src);
-  const stillBuggy = firstSlot && !/users\.map\(\s*\(?[\w$]+\s*\)?\s*=>[\s\S]*`hello \$\{[\w$]+\}`\)/.test(src);
-  const perUserGreeting = /users\.map\(\s*\(?[\w$]+\s*\)?\s*=>[\s\S]*`hello \$\{[\w$]+\}`\)/.test(src) && !firstSlot;
-
-  let verdict: string;
-  if (stopReason === "agent-protocol-failed") verdict = "agent-protocol-failed";
-  else if (!changed) verdict = "no-change";
-  else if (stillBuggy) verdict = "defect-remains";
-  else if (!perUserGreeting) verdict = "unknown-shape";
-  else if (commits.length === 0) verdict = "fixed-but-uncommitted";
-  else verdict = "invariant-satisfied";
+  const verdict = spec.verify(tree, spec, stopReason, commits.length);
 
   const diffs = Object.keys(tree)
     .filter((path) => tree[path] !== spec.files[path])
     .map((path) => ({ path, before: spec.files[path], after: tree[path] }));
+
+  const primaryFile = spec.writable[0];
+  const primarySha = await treeDigest({ [primaryFile]: tree[primaryFile] ?? "" });
 
   return {
     schema: "no-fs-agent.receipt.v0",
@@ -213,7 +342,9 @@ async function runScenario(env: Env, scenarioId: string, spec: CaseSpec): Promis
     stopReason,
     turns,
     commits,
-    appJsSha: await treeDigest({ "app.js": src }),
+    appJsSha: "app.js" in tree ? await treeDigest({ "app.js": tree["app.js"] ?? "" }) : undefined,
+    primaryFile,
+    primarySha,
     diffs,
     verbsLog: verbsLog.slice(0, 24),
     capabilities: { filesystem: false, subprocess: false, node: false },
