@@ -1,0 +1,8 @@
+{
+  "id": "no-fs-agent-gate",
+  "title": "No-fs-agent frozen gate",
+  "kind": "external-verifier",
+  "command": "NO_FS_AGENT_RUN_KEY_FILE=\"$HOME/Library/Application Support/Home/no-fs-agent-run.token\" \"$HOME/.bun/bin/bun\" \"$HOME/cloudflare/no-fs-agent/scripts/home-loop-check.ts\"",
+  "interval_seconds": 3600,
+  "enabled": false
+}

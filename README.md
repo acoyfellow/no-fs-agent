@@ -37,6 +37,27 @@ NO_FS_RUN_KEY="$RUN_KEY" bun run prove
 
 `GET /run` requires `Authorization: Bearer $RUN_KEY` when the secret is set, because a public endpoint that spends Workers AI neurons for anyone is not acceptable on a personal account. Local dev without the secret stays open.
 
+## Home loop proof
+
+This Worker now runs as a Home work loop. Home is the durable local control plane: it decides when a check runs and persists its result. no-fs-agent performs the bounded model run and judges the resulting change. Neither system trusts an agent saying "done."
+
+The adapter, [`scripts/home-loop-check.ts`](scripts/home-loop-check.ts), converts a protected no-fs receipt into Home's required `{ status, summary, items }` result. It maps `invariant-satisfied` to `pass`, `unknown-shape` to `actionable`, and every other result to `blocked`. Its item embeds the original commit and diff.
+
+[`proof/home-loop-proof.json`](proof/home-loop-proof.json) is the cross-realm receipt: Home registered `no-fs-agent-gate`, ran it, persisted `pass` in 3,604 ms, and retained the no-fs receipt (`invariant-satisfied`, 6 turns, committed diff). The loop was then paused; it does not spend Workers AI neurons unattended.
+
+To reproduce the Home boundary after setting `RUN_KEY` above:
+
+```sh
+umask 077
+printf '%s' "$RUN_KEY" > "$HOME/Library/Application Support/Home/no-fs-agent-run.token"
+homectl loop-add ./home-loop.json
+homectl loop-resume no-fs-agent-gate
+homectl loop-check no-fs-agent-gate
+homectl loop-pause no-fs-agent-gate
+```
+
+`home-loop.json` contains no credential. The loop command reads the mode-600 token file only at invocation; the secret appears in neither Home state nor committed proof.
+
 ## What this proves
 
 The middle of the classic agent loop — perceive, change, make durable — needs zero POSIX. The filesystem was a dependency, not a requirement. A real off-the-shelf model (Llama 3.3 70B, no fine-tuning) operated the protocol on the first measurable run.
