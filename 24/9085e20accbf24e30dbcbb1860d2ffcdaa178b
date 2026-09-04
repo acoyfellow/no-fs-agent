@@ -1,0 +1,21 @@
+proof/home-loop-check-direct.json
+  s_a22615f23a4e42::t_4c37e5b739a29e 1
+proof/home-loop-proof.json
+  s_a22615f23a4e42::t_8f69ada60271f8 1-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "249085e20accbf24e30dbcbb1860d2ffcdaa178b",
+  "prompts": {},
+  "sessions": {
+    "s_a22615f23a4e42": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a04e55-f85f-7675-a279-2b25f324188f",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
