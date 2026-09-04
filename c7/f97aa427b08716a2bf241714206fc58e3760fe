@@ -1,0 +1,31 @@
+README.md
+  s_99b55ecf7d26fa::t_491e2c4a238d6a 3,5-7,11-13,22,24,26,36-40,42,44-46,48,50,52-54
+proof/run-greetall-same-name.json
+  s_a22615f23a4e42::t_1a2155671a7f72 1
+proof/run-misleading-fixture.json
+  s_a22615f23a4e42::t_4c09755b406705 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c7f97aa427b08716a2bf241714206fc58e3760fe",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    },
+    "s_a22615f23a4e42": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a04e55-f85f-7675-a279-2b25f324188f",
+        "model": "kimi-k3"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
