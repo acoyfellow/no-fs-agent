@@ -39,10 +39,17 @@ try {
   stages.push({ name: "deployed", ok: deployed.exitCode === 0 && endpoint === expectedEndpoint, stdout: deployed.stdout, stderr: deployed.stderr });
   if (endpoint !== expectedEndpoint) throw new Error("deployment did not return the expected personal workers.dev endpoint");
 
-  const locked = await fetch(`${endpoint}/drafts`);
-  const lockedText = await locked.text();
-  stages.push({ name: "locked", ok: locked.status === 401 && lockedText.includes("run key required"), stdout: `${locked.status} ${lockedText}`, stderr: "" });
-  if (locked.status !== 401) throw new Error("fresh Worker was not locked");
+  let lockedStatus = 0;
+  let lockedText = "";
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const locked = await fetch(`${endpoint}/drafts`);
+    lockedStatus = locked.status;
+    lockedText = await locked.text();
+    if (lockedStatus === 401 && lockedText.includes("run key required")) break;
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  stages.push({ name: "locked", ok: lockedStatus === 401 && lockedText.includes("run key required"), stdout: `${lockedStatus} ${lockedText}`, stderr: "" });
+  if (lockedStatus !== 401) throw new Error("fresh Worker was not locked");
 
   const packageRef = "github:acoyfellow/no-fs-agent#ab5801e";
   const initialized = await run(["bunx", "--bun", packageRef, "init", "--endpoint", endpoint, "--worker", name], sandbox, { ...process.env, CLOUDFLARE_ACCOUNT_ID: accountId, NO_FS_AGENT_CONFIG_DIR: config });
