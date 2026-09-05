@@ -415,16 +415,20 @@ export class Draft {
     if (!isAuthorized(request, this.env)) return Response.json({ error: "run key required", header: "Authorization: Bearer" }, { status: 401 });
     const url = new URL(request.url);
     if (request.method === "POST" && url.pathname === "/start") {
-      let input: DraftInput | null;
       try {
-        input = parseDraftInput(await request.json());
-      } catch {
-        input = null;
+        let input: DraftInput | null;
+        try {
+          input = parseDraftInput(await request.json());
+        } catch {
+          input = null;
+        }
+        if (!input) return Response.json({ error: "invalid task" }, { status: 400 });
+        const record: DraftRecord = { id: this.state.id.toString(), createdAt: new Date().toISOString(), state: "new", input };
+        await this.state.storage.put("draft", record);
+        return Response.json(record, { status: 201 });
+      } catch (error) {
+        return Response.json({ error: "draft storage failed", detail: String(error) }, { status: 500 });
       }
-      if (!input) return Response.json({ error: "invalid task" }, { status: 400 });
-      const record: DraftRecord = { id: this.state.id.toString(), createdAt: new Date().toISOString(), state: "new", input };
-      await this.state.storage.put("draft", record);
-      return Response.json(record, { status: 201 });
     }
 
     const record = await this.state.storage.get<DraftRecord>("draft");
@@ -487,11 +491,15 @@ export default {
       });
     }
     if (url.pathname === "/drafts" || url.pathname.startsWith("/drafts/")) {
-      if (!authorized(request, env)) return Response.json({ error: "run key required", header: "Authorization: Bearer" }, { status: 401 });
+      if (!isAuthorized(request, env)) return Response.json({ error: "run key required", header: "Authorization: Bearer" }, { status: 401 });
       if (request.method === "POST" && url.pathname === "/drafts") {
-        const id = env.DRAFTS.newUniqueId();
-        const body = await request.text();
-        return env.DRAFTS.get(id).fetch(new Request("https://draft/start", { method: "POST", headers: { "content-type": "application/json", Authorization: request.headers.get("Authorization") ?? "" }, body }));
+        try {
+          const id = env.DRAFTS.newUniqueId();
+          const body = await request.text();
+          return await env.DRAFTS.get(id).fetch(new Request("https://draft/start", { method: "POST", headers: { "content-type": "application/json", Authorization: request.headers.get("Authorization") ?? "" }, body }));
+        } catch (error) {
+          return Response.json({ error: "draft start failed", detail: String(error) }, { status: 500 });
+        }
       }
       const parts = url.pathname.split("/").filter(Boolean);
       if (parts.length < 2 || parts.length > 3) return new Response("not found", { status: 404 });
