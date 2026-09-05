@@ -1,3 +1,5 @@
+import { MAX_DRAFT_BYTES, MAX_DRAFT_FILES, MAX_DRAFT_WRITABLE_FILES } from "./limits";
+
 export interface Env {
   AI: Ai;
   RUN_KEY?: string;
@@ -190,6 +192,34 @@ const CASES: Record<string, CaseSpec> = {
   },
 };
 
+function proposalVerdict(tree: Record<string, string>, spec: CaseSpec, stopReason: string, commitsCount: number): string {
+  if (stopReason === "agent-protocol-failed") return "agent-protocol-failed";
+  const changed = Object.keys(tree).some((path) => tree[path] !== spec.files[path]);
+  if (!changed) return "no-change";
+  if (commitsCount === 0) return "fixed-but-uncommitted";
+  return "proposed";
+}
+
+function safeDraftPath(path: string) {
+  return path.length > 0 && path.length <= 240 && !path.startsWith("/") && !path.includes("\\") && !path.split("/").includes("..");
+}
+
+function parseTrySpec(value: unknown): CaseSpec | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const request = value as { task?: unknown; files?: unknown; writable?: unknown };
+  if (typeof request.task !== "string" || request.task.length === 0 || request.task.length > 4_000) return null;
+  if (!request.files || typeof request.files !== "object" || Array.isArray(request.files)) return null;
+  if (!Array.isArray(request.writable) || request.writable.length === 0 || request.writable.length > MAX_DRAFT_WRITABLE_FILES) return null;
+  const files = request.files as Record<string, unknown>;
+  const paths = Object.keys(files);
+  if (paths.length === 0 || paths.length > MAX_DRAFT_FILES || paths.some((path) => !safeDraftPath(path) || typeof files[path] !== "string")) return null;
+  if (paths.reduce((total, path) => total + (files[path] as string).length, 0) > MAX_DRAFT_BYTES) return null;
+  if (request.writable.some((path) => typeof path !== "string")) return null;
+  const writable = [...new Set(request.writable as string[])];
+  if (writable.some((path) => !paths.includes(path))) return null;
+  return { files: files as Record<string, string>, writable, task: request.task, maxTurns: 12, verify: proposalVerdict };
+}
+
 function systemPromptFor(spec: CaseSpec): string {
   return [
     "You are an agent fixing a bug in a tiny JavaScript app.",
@@ -363,10 +393,28 @@ export default {
     if (url.pathname === "/") {
       return Response.json({
         name: WORKER_VERSION,
-        claim: "An LLM agent can read code, fix a planted bug, diff, and commit with no filesystem, shell, or Node.",
-        scenarios: Object.keys(CASES).map((id) => ({ id, run: `/run?scenario=${id}` })),
+        claim: "A model can propose a code change through named actions without a filesystem, shell, or Node.",
+        try: { method: "POST", path: "/try" },
+        scenarios: Object.keys(CASES).map((id) => ({ id, run: `/run?scenario=${id}` })), 
         links: { source: "https://github.com/acoyfellow/no-fs-agent" },
       });
+    }
+    if (request.method === "POST" && url.pathname === "/try") {
+      if (env.RUN_KEY && request.headers.get("Authorization") !== `Bearer ${env.RUN_KEY}`) {
+        return Response.json({ error: "run key required", header: "Authorization: Bearer" }, { status: 401 });
+      }
+      let spec: CaseSpec | null;
+      try {
+        spec = parseTrySpec(await request.json());
+      } catch {
+        spec = null;
+      }
+      if (!spec) return Response.json({ error: "invalid task" }, { status: 400 });
+      try {
+        return Response.json(await runScenario(env, "user-task", spec));
+      } catch (error) {
+        return Response.json({ schema: "no-fs-agent.receipt.v0", scenario: "user-task", workerVersion: WORKER_VERSION, verdict: "runner-error", error: String(error) });
+      }
     }
     if (url.pathname === "/run") {
       if (env.RUN_KEY && request.headers.get("Authorization") !== `Bearer ${env.RUN_KEY}`) {

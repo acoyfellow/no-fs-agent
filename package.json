@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "prove": "bun scripts/prove.ts"
+    "prove": "bun scripts/prove.ts",
+    "try": "bun scripts/cli.ts try",
+    "apply": "bun scripts/cli.ts apply",
+    "product:prove": "bun scripts/product-prove.ts"
   }
 }
