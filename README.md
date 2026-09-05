@@ -6,23 +6,29 @@ You give it a task, the files it may read, the files it may change, and a test. 
 
 The AI runs in a Cloudflare Worker. It has no filesystem, shell, or Node access. It can only list files, read files, write an allowed file, look at its changes, save its work, and finish. Every Worker request needs your run key.
 
-## Use it now
+## Install your Worker
 
-First, deploy your own Worker and keep its address and run key in your shell:
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/acoyfellow/no-fs-agent)
+
+Click the button and sign in to your own Cloudflare account. Cloudflare deploys the Worker into that account. Until you finish setup, it refuses every request.
+
+Copy the Worker URL from Cloudflare, then run this once. `init` generates a run key, stores it in your user config, and sets it as a Cloudflare Worker secret through Wrangler's browser login.
 
 ```sh
-cd /path/to/no-fs-agent
-npx wrangler deploy
-export NO_FS_AGENT_ENDPOINT="https://your-worker.your-subdomain.workers.dev"
-export NO_FS_RUN_KEY="your-run-key"
-echo "$NO_FS_RUN_KEY" | npx wrangler secret put RUN_KEY
+bunx --bun github:acoyfellow/no-fs-agent init \
+  --endpoint https://your-worker.your-subdomain.workers.dev \
+  --worker no-fs-agent
 ```
 
-Then go to a clean git repo. Tell no-fs-agent exactly what it may see, what it may change, and how to check the result:
+If you prefer the terminal, run `npx wrangler login` and `npx wrangler deploy` from a checkout. The config deliberately contains no account ID. Wrangler asks which of your accounts to use.
+
+## Try a change
+
+Go to a clean git repo. Tell no-fs-agent exactly what it may see, what it may change, and how to check the result:
 
 ```sh
 cd /path/to/your-repo
-bun /path/to/no-fs-agent/scripts/cli.ts try \
+bunx --bun github:acoyfellow/no-fs-agent try \
   --task "Fix the greeting bug" \
   --read src/greet.ts \
   --read test/greet.test.ts \
@@ -39,7 +45,7 @@ It prints a receipt path like this:
 Read the patch and the test result. If you want the change, apply that exact receipt:
 
 ```sh
-bun /path/to/no-fs-agent/scripts/cli.ts apply \
+bunx --bun github:acoyfellow/no-fs-agent apply \
   .no-fs-agent/runs/<run-id>/receipt.json
 ```
 

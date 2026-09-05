@@ -465,8 +465,8 @@ export class Draft {
   }
 }
 
-function isAuthorized(request: Request, env: Env) {
-  return !env.RUN_KEY || request.headers.get("Authorization") === `Bearer ${env.RUN_KEY}`;
+export function isAuthorized(request: Request, env: Env) {
+  return typeof env.RUN_KEY === "string" && env.RUN_KEY.length > 0 && request.headers.get("Authorization") === `Bearer ${env.RUN_KEY}`;
 }
 
 async function draftStub(env: Env, id: string) {

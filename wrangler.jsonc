@@ -3,7 +3,6 @@
   "name": "no-fs-agent",
   "main": "src/worker.ts",
   "compatibility_date": "2026-09-04",
-  "account_id": "bfcb6ac5b3ceaf42a09607f6f7925823",
   "ai": {
     "binding": "AI"
   },

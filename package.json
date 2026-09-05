@@ -1,14 +1,17 @@
 {
   "name": "no-fs-agent",
   "version": "0.5.0",
-  "private": true,
   "type": "module",
+  "bin": {
+    "no-fs-agent": "scripts/cli.ts"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "prove": "bun scripts/prove.ts",
     "try": "bun scripts/cli.ts try",
     "apply": "bun scripts/cli.ts apply",
-    "product:prove": "bun scripts/product-prove.ts"
+    "product:prove": "bun scripts/product-prove.ts",
+    "install:prove": "bun scripts/install-prove.ts"
   }
 }

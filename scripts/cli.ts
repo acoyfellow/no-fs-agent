@@ -1,5 +1,6 @@
+#!/usr/bin/env bun
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { mkdir } from "node:fs/promises";
 
 type Diff = { path: string; before: string; after: string };
@@ -37,11 +38,39 @@ type TryOptions = {
   readable: string[];
   writable: string[];
   check: string;
+  endpoint?: string;
+};
+
+type LocalConfig = {
   endpoint: string;
+  runKey: string;
 };
 
 function output(value: unknown) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+function configPath() {
+  return join(process.env.NO_FS_AGENT_CONFIG_DIR ?? join(homedir(), ".config", "no-fs-agent"), "config.json");
+}
+
+async function readLocalConfig(): Promise<LocalConfig | null> {
+  try {
+    const value = (await Bun.file(configPath()).json()) as Partial<LocalConfig>;
+    return typeof value.endpoint === "string" && typeof value.runKey === "string" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeLocalConfig(config: LocalConfig) {
+  const path = configPath();
+  await mkdir(join(path, ".."), { recursive: true });
+  await Bun.write(path, JSON.stringify(config, null, 2));
+}
+
+function generatedRunKey() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function fail(message: string): never {
@@ -117,7 +146,6 @@ function parseTry(args: string[]): TryOptions {
   const check = oneOption(args, "--check");
   const endpoint = oneOption(args, "--endpoint") ?? process.env.NO_FS_AGENT_ENDPOINT;
   if (!task) fail("--task is required.");
-  if (!endpoint) fail("Set NO_FS_AGENT_ENDPOINT or pass --endpoint.");
   if (task.length > 4_000) fail("--task is too long.");
   if (readable.length === 0) fail("At least one --read path is required.");
   if (writable.length === 0) fail("At least one --write path is required.");
@@ -165,17 +193,19 @@ async function saveReceipt(root: string, receipt: CheckedPatchReceipt) {
 
 async function tryTask(args: string[]) {
   const options = parseTry(args);
+  const config = await readLocalConfig();
+  const endpoint = options.endpoint ?? process.env.NO_FS_AGENT_ENDPOINT ?? config?.endpoint;
+  if (!endpoint) fail("Run no-fs-agent init or set NO_FS_AGENT_ENDPOINT.");
+  const runKey = process.env.NO_FS_RUN_KEY ?? config?.runKey;
+  if (!runKey) fail("Run no-fs-agent init or set NO_FS_RUN_KEY.");
   const root = await repoRoot();
   await ensureClean(root);
   const readable = unique([...options.readable, ...options.writable]);
   const sources = await readSources(root, readable);
   const writable = unique((await Promise.all(options.writable.map((path) => checkedPath(root, path)))).map((file) => file.path));
   const files = Object.fromEntries(sources.map((source) => [source.path, source.contents]));
-  const runKey = process.env.NO_FS_RUN_KEY;
-  if (!runKey) fail("Set NO_FS_RUN_KEY before starting a run.");
-
   const headers = { Authorization: `Bearer ${runKey}`, "content-type": "application/json" };
-  const createdResponse = await fetch(`${options.endpoint}/drafts`, {
+  const createdResponse = await fetch(`${endpoint}/drafts`, {
     method: "POST",
     headers,
     body: JSON.stringify({ task: options.task, files, writable }),
@@ -184,14 +214,14 @@ async function tryTask(args: string[]) {
   const created = (await createdResponse.json()) as Draft;
   if (!createdResponse.ok || !created.id) fail(`Worker refused the task: ${JSON.stringify(created)}`);
 
-  const runResponse = await fetch(`${options.endpoint}/drafts/${created.id}/run`, { method: "POST", headers, signal: AbortSignal.timeout(270_000) });
+  const runResponse = await fetch(`${endpoint}/drafts/${created.id}/run`, { method: "POST", headers, signal: AbortSignal.timeout(270_000) });
   const draft = (await runResponse.json()) as Draft;
   if (!runResponse.ok || !draft.proposal) fail(`Worker could not run the draft: ${JSON.stringify(draft)}`);
   const proposal = draft.proposal;
 
   const id = crypto.randomUUID();
   const source = { repo: root, files: sources.map(({ path, sha256 }) => ({ path, sha256 })) };
-  const request = { task: options.task, readable, writable, check: options.check, endpoint: options.endpoint };
+  const request = { task: options.task, readable, writable, check: options.check, endpoint };
   let receipt: CheckedPatchReceipt;
   if (!validProposal(proposal, writable)) {
     receipt = { schema: "no-fs-agent.checked-patch.v0", id, createdAt: new Date().toISOString(), source, request, draft: { id: created.id, state: draft.state }, proposal, check: null, verdict: "not-proposed" };
@@ -200,7 +230,7 @@ async function tryTask(args: string[]) {
     const sourceByPath = new Map(sources.map((item) => [item.path, item.contents]));
     if (diffs.some((diff) => sourceByPath.get(diff.path) !== diff.before || typeof diff.after !== "string")) fail("Worker returned a patch that does not match the draft it received.");
     const check = await applyToTestWorktree(root, sources, diffs, options.check);
-    const checkedResponse = await fetch(`${options.endpoint}/drafts/${created.id}/check`, { method: "POST", headers, body: JSON.stringify(check), signal: AbortSignal.timeout(30_000) });
+    const checkedResponse = await fetch(`${endpoint}/drafts/${created.id}/check`, { method: "POST", headers, body: JSON.stringify(check), signal: AbortSignal.timeout(30_000) });
     const checked = (await checkedResponse.json()) as Draft;
     if (!checkedResponse.ok) fail(`Worker could not save the check: ${JSON.stringify(checked)}`);
     receipt = { schema: "no-fs-agent.checked-patch.v0", id, createdAt: new Date().toISOString(), source, request, draft: { id: created.id, state: checked.state }, proposal, check, verdict: check.passed ? "passed" : "failed-test" };
@@ -208,6 +238,18 @@ async function tryTask(args: string[]) {
   const receiptPath = await saveReceipt(root, receipt);
   output({ id, verdict: receipt.verdict, receipt: receiptPath });
   if (receipt.verdict !== "passed") process.exit(1);
+}
+
+async function initTask(args: string[]) {
+  const endpoint = oneOption(args, "--endpoint");
+  const worker = oneOption(args, "--worker");
+  if (!endpoint || !worker || args.some((arg) => arg.startsWith("--") && !["--endpoint", "--worker"].includes(arg))) fail("Usage: no-fs-agent init --endpoint <https://worker.workers.dev> --worker <worker-name>.");
+  const runKey = generatedRunKey();
+  const child = Bun.spawn(["npx", "wrangler", "secret", "put", "RUN_KEY", "--name", worker], { stdin: new Blob([runKey]).stream(), stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+  if (exitCode !== 0) fail(`Could not set RUN_KEY with Wrangler: ${stderr || stdout}`);
+  await writeLocalConfig({ endpoint: endpoint.replace(/\/$/, ""), runKey });
+  output({ verdict: "initialized", endpoint: endpoint.replace(/\/$/, ""), config: configPath() });
 }
 
 async function applyReceipt(args: string[]) {
@@ -233,6 +275,7 @@ async function applyReceipt(args: string[]) {
 }
 
 const [commandName, ...args] = process.argv.slice(2);
-if (commandName === "try") await tryTask(args);
+if (commandName === "init") await initTask(args);
+else if (commandName === "try") await tryTask(args);
 else if (commandName === "apply") await applyReceipt(args);
-else fail("Usage: no-fs-agent <try|apply> ...");
+else fail("Usage: no-fs-agent <init|try|apply> ...");
