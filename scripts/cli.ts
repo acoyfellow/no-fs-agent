@@ -151,7 +151,7 @@ function parseTry(args: string[]): TryOptions {
   if (writable.length === 0) fail("At least one --write path is required.");
   if (!check) fail("--check is required.");
   if (args.some((arg) => arg.startsWith("--") && !["--task", "--read", "--write", "--check", "--endpoint"].includes(arg))) fail("Unknown option.");
-  return { task, readable, writable, check, endpoint: endpoint.replace(/\/$/, "") };
+  return { task, readable, writable, check, endpoint: endpoint?.replace(/\/$/, "") };
 }
 
 async function ensureClean(root: string) {
