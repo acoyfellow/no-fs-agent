@@ -4,6 +4,8 @@ No-fs-agent is a command-line tool for letting an AI try a small code change bef
 
 You give it a task, the files it may read, the files it may change, and a test. It keeps a draft, gives you a patch and a receipt, and lets you decide whether to apply it.
 
+Why use this instead of giving an agent your terminal? A coding agent with normal computer access inherits too much authority. It can see every file, run every command, use available credentials, and reach deploy paths you did not mean to grant. As agents get more capable, a small mistake can become a costly one. No-fs-agent makes the authority small first. The model sees only the files you name. It can change only the files you allow. Your test runs outside the model. You still choose whether the real repository changes.
+
 The AI runs in a Cloudflare Worker. It has no filesystem, shell, or Node access. It can only list files, read files, write an allowed file, look at its changes, save its work, and finish. Every Worker request needs your run key.
 
 ## Install your Worker

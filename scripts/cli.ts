@@ -245,7 +245,10 @@ async function initTask(args: string[]) {
   const worker = oneOption(args, "--worker");
   if (!endpoint || !worker || args.some((arg) => arg.startsWith("--") && !["--endpoint", "--worker"].includes(arg))) fail("Usage: no-fs-agent init --endpoint <https://worker.workers.dev> --worker <worker-name>.");
   const runKey = generatedRunKey();
-  const child = Bun.spawn(["npx", "wrangler", "secret", "put", "RUN_KEY", "--name", worker], { stdin: new Blob([runKey]).stream(), stdout: "pipe", stderr: "pipe" });
+  const node = Bun.which("node");
+  const npx = Bun.which("npx");
+  if (!node || !npx) fail("init requires Node.js and npx to set the Worker secret.");
+  const child = Bun.spawn([node, npx, "wrangler", "secret", "put", "RUN_KEY", "--name", worker], { stdin: new Blob([runKey]).stream(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
   if (exitCode !== 0) fail(`Could not set RUN_KEY with Wrangler: ${stderr || stdout}`);
   await writeLocalConfig({ endpoint: endpoint.replace(/\/$/, ""), runKey });

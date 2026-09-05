@@ -12,6 +12,7 @@
     "try": "bun scripts/cli.ts try",
     "apply": "bun scripts/cli.ts apply",
     "product:prove": "bun scripts/product-prove.ts",
-    "install:prove": "bun scripts/install-prove.ts"
+    "install:prove": "bun scripts/install-prove.ts",
+    "live-install:prove": "bun scripts/live-install-prove.ts"
   }
 }
