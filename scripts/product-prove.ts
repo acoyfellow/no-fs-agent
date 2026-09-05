@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 
 type Receipt = {
   verdict: string;
+  draft: { id: string; state: string };
   source: { repo: string; files: { path: string; sha256: string }[] };
   request: { task: string; readable: string[]; writable: string[]; check: string };
   proposal: { verdict?: string; diffs?: { path: string; before: string; after: string }[]; turns?: number; commits?: unknown[] };
@@ -59,6 +60,9 @@ try {
   const receipt = JSON.parse(await readFile(result.receipt, "utf8")) as Receipt;
   if (receipt.verdict !== "passed" || !receipt.check?.passed || receipt.proposal.verdict !== "proposed") fail("The receipt does not prove a checked proposal.");
   if (!receipt.proposal.diffs?.some((diff) => diff.path === "src/limits.ts" && diff.after.includes("export const MAX_DRAFT_FILES = 21;"))) fail("The receipt lacks the expected source change.");
+  const savedResponse = await fetch(`${endpoint}/drafts/${receipt.draft.id}`, { headers: { Authorization: `Bearer ${runKey}` } });
+  const savedDraft = (await savedResponse.json()) as { state?: string; proposal?: { verdict?: string } };
+  if (!savedResponse.ok || savedDraft.state !== "checked" || savedDraft.proposal?.verdict !== "proposed") fail("The Worker did not retain the checked draft.");
 
   const changedSource = join(worktree, "src", "limits.ts");
   const current = await readFile(changedSource, "utf8");
@@ -70,6 +74,7 @@ try {
     schema: "no-fs-agent.product-proof.v0",
     task: receipt.request.task,
     source_files: receipt.source.files.map((file) => ({ path: file.path, sha256: file.sha256 })),
+    draft: receipt.draft,
     proposal: receipt.proposal,
     check: receipt.check,
     verdict: receipt.verdict,

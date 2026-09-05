@@ -2,10 +2,11 @@ import { MAX_DRAFT_BYTES, MAX_DRAFT_FILES, MAX_DRAFT_WRITABLE_FILES } from "./li
 
 export interface Env {
   AI: Ai;
+  DRAFTS: DurableObjectNamespace;
   RUN_KEY?: string;
 }
 
-const WORKER_VERSION = "no-fs-agent@0.4.1";
+const WORKER_VERSION = "no-fs-agent@0.5.0";
 const MODEL_ID = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_TURNS = 8;
 const MAX_INVALID = 3;
@@ -390,17 +391,116 @@ async function runScenario(env: Env, scenarioId: string, spec: CaseSpec): Promis
   };
 }
 
+type DraftInput = { task: string; files: Record<string, string>; writable: string[] };
+
+type DraftRecord = {
+  id: string;
+  createdAt: string;
+  state: "new" | "proposed" | "checked" | "failed";
+  input: DraftInput;
+  proposal?: Record<string, unknown>;
+  check?: { passed: boolean; exitCode: number };
+};
+
+function parseDraftInput(value: unknown): DraftInput | null {
+  const spec = parseTrySpec(value);
+  if (!spec) return null;
+  return { task: spec.task, files: spec.files, writable: spec.writable };
+}
+
+export class Draft {
+  constructor(private readonly state: DurableObjectState, private readonly env: Env) {}
+
+  async fetch(request: Request): Promise<Response> {
+    if (!isAuthorized(request, this.env)) return Response.json({ error: "run key required", header: "Authorization: Bearer" }, { status: 401 });
+    const url = new URL(request.url);
+    if (request.method === "POST" && url.pathname === "/start") {
+      let input: DraftInput | null;
+      try {
+        input = parseDraftInput(await request.json());
+      } catch {
+        input = null;
+      }
+      if (!input) return Response.json({ error: "invalid task" }, { status: 400 });
+      const record: DraftRecord = { id: this.state.id.toString(), createdAt: new Date().toISOString(), state: "new", input };
+      await this.state.storage.put("draft", record);
+      return Response.json(record, { status: 201 });
+    }
+
+    const record = await this.state.storage.get<DraftRecord>("draft");
+    if (!record) return Response.json({ error: "draft not found" }, { status: 404 });
+    if (request.method === "GET" && url.pathname === "/") return Response.json(record);
+
+    if (request.method === "POST" && url.pathname === "/run") {
+      if (record.state !== "new") return Response.json({ error: "draft has already run", state: record.state }, { status: 409 });
+      const spec = parseTrySpec(record.input);
+      if (!spec) return Response.json({ error: "stored draft is invalid" }, { status: 500 });
+      const proposal = await runScenario(this.env, "user-task", spec);
+      record.proposal = proposal;
+      record.state = proposal.verdict === "proposed" ? "proposed" : "failed";
+      await this.state.storage.put("draft", record);
+      return Response.json(record);
+    }
+
+    if (request.method === "POST" && url.pathname === "/check") {
+      if (record.state !== "proposed") return Response.json({ error: "draft is not ready for a check", state: record.state }, { status: 409 });
+      let check: { passed?: unknown; exitCode?: unknown } | null;
+      try {
+        check = await request.json();
+      } catch {
+        check = null;
+      }
+      if (!check || typeof check.passed !== "boolean" || typeof check.exitCode !== "number") return Response.json({ error: "invalid check" }, { status: 400 });
+      record.check = { passed: check.passed, exitCode: check.exitCode };
+      record.state = check.passed ? "checked" : "failed";
+      await this.state.storage.put("draft", record);
+      return Response.json(record);
+    }
+
+    return new Response("not found", { status: 404 });
+  }
+}
+
+function isAuthorized(request: Request, env: Env) {
+  return !env.RUN_KEY || request.headers.get("Authorization") === `Bearer ${env.RUN_KEY}`;
+}
+
+async function draftStub(env: Env, id: string) {
+  try {
+    return env.DRAFTS.get(env.DRAFTS.idFromString(id));
+  } catch {
+    return null;
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    if (!isAuthorized(request, env)) return Response.json({ error: "run key required", header: "Authorization: Bearer" }, { status: 401 });
     const url = new URL(request.url);
     if (url.pathname === "/") {
       return Response.json({
         name: WORKER_VERSION,
         claim: "A model can propose a code change through named actions without a filesystem, shell, or Node.",
-        try: { method: "POST", path: "/try" },
+        drafts: { create: "POST /drafts", read: "GET /drafts/:id", run: "POST /drafts/:id/run", check: "POST /drafts/:id/check" },
         scenarios: Object.keys(CASES).map((id) => ({ id, run: `/run?scenario=${id}` })), 
         links: { source: "https://github.com/acoyfellow/no-fs-agent" },
       });
+    }
+    if (url.pathname === "/drafts" || url.pathname.startsWith("/drafts/")) {
+      if (!authorized(request, env)) return Response.json({ error: "run key required", header: "Authorization: Bearer" }, { status: 401 });
+      if (request.method === "POST" && url.pathname === "/drafts") {
+        const id = env.DRAFTS.newUniqueId();
+        const body = await request.text();
+        return env.DRAFTS.get(id).fetch(new Request("https://draft/start", { method: "POST", headers: { "content-type": "application/json", Authorization: request.headers.get("Authorization") ?? "" }, body }));
+      }
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (parts.length < 2 || parts.length > 3) return new Response("not found", { status: 404 });
+      const stub = await draftStub(env, parts[1]);
+      if (!stub) return Response.json({ error: "invalid draft id" }, { status: 404 });
+      const action = parts[2] ?? "";
+      if ((action && !["run", "check"].includes(action)) || (!action && request.method !== "GET") || (action && request.method !== "POST")) return new Response("not found", { status: 404 });
+      const body = request.method === "GET" ? undefined : await request.text();
+      return stub.fetch(new Request(`https://draft/${action}`, { method: request.method, headers: { "content-type": "application/json", Authorization: request.headers.get("Authorization") ?? "" }, body }));
     }
     if (request.method === "POST" && url.pathname === "/try") {
       if (env.RUN_KEY && request.headers.get("Authorization") !== `Bearer ${env.RUN_KEY}`) {

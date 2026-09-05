@@ -7,6 +7,20 @@
   "ai": {
     "binding": "AI"
   },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DRAFTS",
+        "class_name": "Draft"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["Draft"]
+    }
+  ],
   "workers_dev": true,
   "limits": {
     "cpu_ms": 300000

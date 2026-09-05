@@ -18,12 +18,15 @@ type Proposal = {
 
 type SourceFile = { path: string; sha256: string };
 
+type Draft = { id: string; state: string; proposal?: Proposal };
+
 type CheckedPatchReceipt = {
   schema: "no-fs-agent.checked-patch.v0";
   id: string;
   createdAt: string;
   source: { repo: string; files: SourceFile[] };
   request: { task: string; readable: string[]; writable: string[]; check: string; endpoint: string };
+  draft: { id: string; state: string };
   proposal: Proposal;
   check: { passed: boolean; exitCode: number; stdout: string; stderr: string } | null;
   verdict: "passed" | "failed-test" | "not-proposed";
@@ -171,27 +174,36 @@ async function tryTask(args: string[]) {
   const runKey = process.env.NO_FS_RUN_KEY;
   if (!runKey) fail("Set NO_FS_RUN_KEY before starting a run.");
 
-  const response = await fetch(`${options.endpoint}/try`, {
+  const headers = { Authorization: `Bearer ${runKey}`, "content-type": "application/json" };
+  const createdResponse = await fetch(`${options.endpoint}/drafts`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${runKey}`, "content-type": "application/json" },
+    headers,
     body: JSON.stringify({ task: options.task, files, writable }),
     signal: AbortSignal.timeout(270_000),
   });
-  const proposal = (await response.json()) as Proposal;
-  if (!response.ok) fail(`Worker refused the task: ${JSON.stringify(proposal)}`);
+  const created = (await createdResponse.json()) as Draft;
+  if (!createdResponse.ok || !created.id) fail(`Worker refused the task: ${JSON.stringify(created)}`);
+
+  const runResponse = await fetch(`${options.endpoint}/drafts/${created.id}/run`, { method: "POST", headers, signal: AbortSignal.timeout(270_000) });
+  const draft = (await runResponse.json()) as Draft;
+  if (!runResponse.ok || !draft.proposal) fail(`Worker could not run the draft: ${JSON.stringify(draft)}`);
+  const proposal = draft.proposal;
 
   const id = crypto.randomUUID();
   const source = { repo: root, files: sources.map(({ path, sha256 }) => ({ path, sha256 })) };
   const request = { task: options.task, readable, writable, check: options.check, endpoint: options.endpoint };
   let receipt: CheckedPatchReceipt;
   if (!validProposal(proposal, writable)) {
-    receipt = { schema: "no-fs-agent.checked-patch.v0", id, createdAt: new Date().toISOString(), source, request, proposal, check: null, verdict: "not-proposed" };
+    receipt = { schema: "no-fs-agent.checked-patch.v0", id, createdAt: new Date().toISOString(), source, request, draft: { id: created.id, state: draft.state }, proposal, check: null, verdict: "not-proposed" };
   } else {
     const diffs = proposal.diffs ?? [];
     const sourceByPath = new Map(sources.map((item) => [item.path, item.contents]));
     if (diffs.some((diff) => sourceByPath.get(diff.path) !== diff.before || typeof diff.after !== "string")) fail("Worker returned a patch that does not match the draft it received.");
     const check = await applyToTestWorktree(root, sources, diffs, options.check);
-    receipt = { schema: "no-fs-agent.checked-patch.v0", id, createdAt: new Date().toISOString(), source, request, proposal, check, verdict: check.passed ? "passed" : "failed-test" };
+    const checkedResponse = await fetch(`${options.endpoint}/drafts/${created.id}/check`, { method: "POST", headers, body: JSON.stringify(check), signal: AbortSignal.timeout(30_000) });
+    const checked = (await checkedResponse.json()) as Draft;
+    if (!checkedResponse.ok) fail(`Worker could not save the check: ${JSON.stringify(checked)}`);
+    receipt = { schema: "no-fs-agent.checked-patch.v0", id, createdAt: new Date().toISOString(), source, request, draft: { id: created.id, state: checked.state }, proposal, check, verdict: check.passed ? "passed" : "failed-test" };
   }
   const receiptPath = await saveReceipt(root, receipt);
   output({ id, verdict: receipt.verdict, receipt: receiptPath });

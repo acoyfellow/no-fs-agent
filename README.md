@@ -2,9 +2,9 @@
 
 No-fs-agent is a command-line tool for letting an AI try a small code change before it touches your real repo.
 
-You give it a task, the files it may read, the files it may change, and a test. It gives you a patch and a receipt. You decide whether to apply it.
+You give it a task, the files it may read, the files it may change, and a test. It keeps a draft, gives you a patch and a receipt, and lets you decide whether to apply it.
 
-The AI runs in a Cloudflare Worker. It has no filesystem, shell, or Node access. It can only list files, read files, write an allowed file, look at its changes, save its work, and finish.
+The AI runs in a Cloudflare Worker. It has no filesystem, shell, or Node access. It can only list files, read files, write an allowed file, look at its changes, save its work, and finish. Every Worker request needs your run key.
 
 ## Use it now
 
@@ -48,12 +48,12 @@ bun /path/to/no-fs-agent/scripts/cli.ts apply \
 ## What happens
 
 1. The tool checks that your git repo has no tracked changes.
-2. It copies only the files you named into a draft sent to the Worker.
+2. It copies only the files you named into a draft stored by the Worker.
 3. The Worker lets the model work only through named actions.
-4. The Worker returns a proposed patch. It does not touch your repo.
+4. The Worker saves the proposed patch in that draft. It does not touch your repo.
 5. The tool puts that patch in a temporary git worktree and runs your check there.
-6. It saves the task, file hashes, model steps, patch, and test result in a local receipt.
-7. You can apply a passing receipt yourself.
+6. The tool saves the test result back to the draft and writes a local receipt with the task, file hashes, model steps, patch, and test result.
+7. You can read the same draft later or apply a passing receipt yourself.
 
 A failed test still leaves a receipt. A model that does not make a usable patch still leaves a receipt. Nothing is applied automatically.
 
@@ -61,7 +61,7 @@ A failed test still leaves a receipt. A model that does not make a usable patch 
 
 The product proof used no-fs-agent on no-fs-agent itself. The task changed the Worker’s real draft-file limit from 20 to 21 in a temporary copy of this repo.
 
-The model read `src/limits.ts`, changed it, looked at the diff, and saved the change. An outside `bun` command imported the changed file and checked that the limit was 21. Then the source file was changed by hand and `apply` refused the old receipt.
+The model read `src/limits.ts`, changed it, looked at the diff, and saved the change. The Worker kept the draft and the outside check result. An outside `bun` command imported the changed file and checked that the limit was 21. Then the source file was changed by hand and `apply` refused the old receipt.
 
 - [Product proof](proof/product-self-run.json)
 - Result: `passed`
@@ -92,7 +92,7 @@ Your test command does run on your machine, in a temporary git worktree. That co
 
 - It needs a clean git repo.
 - It starts from a small list of files; it does not search a large repo for you.
-- It saves receipts on your machine, not in a shared service.
+- It keeps small drafts in one Worker. It has no accounts, team sharing, or draft browser yet.
 - It does not install itself as a normal `no-fs-agent` command yet.
 - It does not open pull requests, merge changes, or deploy.
 - It does not prove that every test command is a good test.

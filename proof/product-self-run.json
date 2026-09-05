@@ -7,10 +7,14 @@
       "sha256": "f1f986bf94ca066e4b6475051a7de3a0fdb54a5f9fd9018efc6ac97c821f17b4"
     }
   ],
+  "draft": {
+    "id": "2dc73a4cb29d0932e76fcd6b675cbf6b31bb3d3c5413fb584609618348a25f69",
+    "state": "checked"
+  },
   "proposal": {
     "schema": "no-fs-agent.receipt.v0",
     "scenario": "user-task",
-    "workerVersion": "no-fs-agent@0.4.1",
+    "workerVersion": "no-fs-agent@0.5.0",
     "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     "verdict": "proposed",
     "stopReason": "done",
