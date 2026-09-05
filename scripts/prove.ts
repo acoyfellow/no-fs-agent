@@ -1,5 +1,6 @@
 const origin = process.argv[2] ?? "https://no-fs-agent.coy.workers.dev";
-const runKey = process.argv[3] ?? process.env.NO_FS_RUN_KEY ?? "";
+const localRunKey = (await Bun.file(".run-key").exists()) ? (await Bun.file(".run-key").text()).trim() : "";
+const runKey = process.argv[3] ?? process.env.NO_FS_RUN_KEY ?? localRunKey;
 
 interface Receipt {
   schema: string;

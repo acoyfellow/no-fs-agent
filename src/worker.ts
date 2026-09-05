@@ -5,9 +5,9 @@ export interface Env {
   RUN_KEY?: string;
 }
 
-const WORKER_VERSION = "no-fs-agent@0.4.0";
+const WORKER_VERSION = "no-fs-agent@0.4.1";
 const MODEL_ID = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-const MAX_TURNS = 6;
+const MAX_TURNS = 8;
 const MAX_INVALID = 3;
 
 interface CaseSpec {
@@ -24,6 +24,7 @@ function greetallVerdict(tree: Record<string, string>, spec: CaseSpec, stopReaso
   const firstSlot = /users\[\s*0\s*\]|users\.at\(\s*0\s*\)/.test(src);
   const perUserMap = /users\.map\(\s*\(?[\w$]+\s*\)?\s*=>[\s\S]*`hello \$\{[\w$]+}`\)/.test(src);
   if (stopReason === "agent-protocol-failed") return "agent-protocol-failed";
+  if (stopReason !== "done") return "incomplete";
   if (!changed) return "no-change";
   if (firstSlot && !perUserMap) return "defect-remains";
   if (!(perUserMap && !firstSlot)) return "unknown-shape";
@@ -70,6 +71,7 @@ function sensitivityVerdict(tree: Record<string, string>, spec: CaseSpec, stopRe
   const src = tree["verify.js"] ?? "";
   const changed = src !== spec.files["verify.js"];
   if (stopReason === "agent-protocol-failed") return "agent-protocol-failed";
+  if (stopReason !== "done") return "incomplete";
   if (!changed) return "no-change";
   const buggyOriginal = spec.files["buggy.js"];
   const aliasAt = tree["fixtures/alias-at.js"] ?? "";
@@ -194,6 +196,7 @@ const CASES: Record<string, CaseSpec> = {
 
 function proposalVerdict(tree: Record<string, string>, spec: CaseSpec, stopReason: string, commitsCount: number): string {
   if (stopReason === "agent-protocol-failed") return "agent-protocol-failed";
+  if (stopReason !== "done") return "incomplete";
   const changed = Object.keys(tree).some((path) => tree[path] !== spec.files[path]);
   if (!changed) return "no-change";
   if (commitsCount === 0) return "fixed-but-uncommitted";

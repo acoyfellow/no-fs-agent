@@ -21,8 +21,10 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-const runKey = process.env.NO_FS_RUN_KEY;
+const localRunKey = (await Bun.file(".run-key").exists()) ? (await Bun.file(".run-key").text()).trim() : "";
+const runKey = process.env.NO_FS_RUN_KEY ?? localRunKey;
 if (!runKey) fail("Set NO_FS_RUN_KEY before running the product proof.");
+process.env.NO_FS_RUN_KEY = runKey;
 const endpoint = process.env.NO_FS_AGENT_ENDPOINT ?? "https://no-fs-agent.coy.workers.dev";
 
 const sourceRoot = process.cwd();

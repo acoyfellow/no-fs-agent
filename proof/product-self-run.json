@@ -10,7 +10,7 @@
   "proposal": {
     "schema": "no-fs-agent.receipt.v0",
     "scenario": "user-task",
-    "workerVersion": "no-fs-agent@0.4.0",
+    "workerVersion": "no-fs-agent@0.4.1",
     "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     "verdict": "proposed",
     "stopReason": "done",
@@ -18,7 +18,7 @@
     "commits": [
       {
         "id": "c5fb1ecbf8cdb",
-        "message": "Increased MAX_DRAFT_FILES from 20 to 21"
+        "message": "Increased MAX_DRAFT_FILES to 21"
       }
     ],
     "primaryFile": "src/limits.ts",
