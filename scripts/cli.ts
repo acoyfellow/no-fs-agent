@@ -73,6 +73,10 @@ function generatedRunKey() {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function nodeEnvironment() {
+  return Object.fromEntries(Object.entries(process.env).filter(([name, value]) => value !== undefined && name !== "npm_execpath" && name !== "npm_config_user_agent" && !name.startsWith("BUN_"))) as Record<string, string>;
+}
+
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);
   process.exit(1);
@@ -248,7 +252,7 @@ async function initTask(args: string[]) {
   const node = Bun.which("node");
   const npx = Bun.which("npx");
   if (!node || !npx) fail("init requires Node.js and npx to set the Worker secret.");
-  const child = Bun.spawn([node, npx, "wrangler", "secret", "put", "RUN_KEY", "--name", worker], { stdin: new Blob([runKey]).stream(), stdout: "pipe", stderr: "pipe" });
+  const child = Bun.spawn([node, npx, "wrangler", "secret", "put", "RUN_KEY", "--name", worker], { env: nodeEnvironment(), stdin: new Blob([runKey]).stream(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
   if (exitCode !== 0) fail(`Could not set RUN_KEY with Wrangler: ${stderr || stdout}`);
   await writeLocalConfig({ endpoint: endpoint.replace(/\/$/, ""), runKey });

@@ -40,7 +40,7 @@ try {
   stages.push({ name: "locked", ok: locked.status === 401 && lockedText.includes("run key required"), stdout: `${locked.status} ${lockedText}`, stderr: "" });
   if (locked.status !== 401) throw new Error("fresh Worker was not locked");
 
-  const packageRef = "github:acoyfellow/no-fs-agent#baf7b34";
+  const packageRef = "github:acoyfellow/no-fs-agent#21f05ff";
   const initialized = await run(["bunx", "--bun", packageRef, "init", "--endpoint", endpoint, "--worker", name], sandbox, { ...process.env, CLOUDFLARE_ACCOUNT_ID: accountId, NO_FS_AGENT_CONFIG_DIR: config });
   stages.push({ name: "initialized", ok: initialized.exitCode === 0 && initialized.stdout.includes("initialized"), stdout: initialized.stdout, stderr: initialized.stderr });
   if (initialized.exitCode !== 0) throw new Error("init failed");
