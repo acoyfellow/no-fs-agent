@@ -66,40 +66,9 @@ The proof script calls the live Worker. It exits with an error unless the model 
 
 The Worker needs `Authorization: Bearer $RUN_KEY` to run a task. This stops strangers from spending your Workers AI credits. Local development works without the secret.
 
-## Home proof
-
-Home is the local program that keeps track of work over time. It can run this check and save the result.
-
-The adapter is [scripts/home-loop-check.ts](scripts/home-loop-check.ts). It runs no-fs-agent and turns its result into the small JSON shape Home expects:
-
-```json
-{
-  "status": "pass",
-  "summary": "No-fs-agent greetall-same-name: invariant-satisfied."
-}
-```
-
-This was run for real. Home saved a passing result in 3.6 seconds. Its saved result includes the model's change and the outside check.
-
-- [Home proof](proof/home-loop-proof.json)
-- [Adapter result](proof/home-loop-check-direct.json)
-
-To add the loop to Home after you set `RUN_KEY` above:
-
-```sh
-umask 077
-printf '%s' "$RUN_KEY" > "$HOME/Library/Application Support/Home/no-fs-agent-run.token"
-homectl loop-add ./home-loop.json
-homectl loop-resume no-fs-agent-gate
-homectl loop-check no-fs-agent-gate
-homectl loop-pause no-fs-agent-gate
-```
-
-The loop file does not contain the secret. The secret stays in a local file that only your user can read. The loop is left paused after the proof, so it does not keep using AI credits.
-
 ## What this shows
 
-For this small task, a model did useful code work without access to a computer's normal file and command tools. A small set of named actions was enough.
+For this small task, a model did useful code work without access to a computer's normal file and command tools. A small set of named actions was enough. no-fs-agent is a standalone tool; it does not need Home or any other local service.
 
 It also shows a safer split:
 
