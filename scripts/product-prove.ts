@@ -80,7 +80,8 @@ try {
     verdict: receipt.verdict,
     apply_after_source_change: "refused",
   };
-  await Bun.write(join(sourceRoot, "proof", "product-self-run.json"), JSON.stringify(proof, null, 2));
+  const proofOutput = process.env.NO_FS_PRODUCT_PROOF_OUT;
+  if (proofOutput) await Bun.write(proofOutput, JSON.stringify(proof, null, 2));
   process.stdout.write("PASS: checked patch receipt created and changed source refused by apply\n");
 } finally {
   await run(["git", "worktree", "remove", "--force", worktree], sourceRoot);
