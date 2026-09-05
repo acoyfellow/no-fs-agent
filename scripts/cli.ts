@@ -37,8 +37,6 @@ type TryOptions = {
   endpoint: string;
 };
 
-const defaultEndpoint = "https://no-fs-agent.coy.workers.dev";
-
 function output(value: unknown) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
@@ -114,8 +112,9 @@ function parseTry(args: string[]): TryOptions {
   const readable = unique(optionValues(args, "--read"));
   const writable = unique(optionValues(args, "--write"));
   const check = oneOption(args, "--check");
-  const endpoint = oneOption(args, "--endpoint") ?? process.env.NO_FS_AGENT_ENDPOINT ?? defaultEndpoint;
+  const endpoint = oneOption(args, "--endpoint") ?? process.env.NO_FS_AGENT_ENDPOINT;
   if (!task) fail("--task is required.");
+  if (!endpoint) fail("Set NO_FS_AGENT_ENDPOINT or pass --endpoint.");
   if (task.length > 4_000) fail("--task is too long.");
   if (readable.length === 0) fail("At least one --read path is required.");
   if (writable.length === 0) fail("At least one --write path is required.");

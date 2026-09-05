@@ -5,7 +5,7 @@ export interface Env {
   RUN_KEY?: string;
 }
 
-const WORKER_VERSION = "no-fs-agent@0.3.0";
+const WORKER_VERSION = "no-fs-agent@0.4.0";
 const MODEL_ID = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_TURNS = 6;
 const MAX_INVALID = 3;

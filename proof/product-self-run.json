@@ -1,0 +1,84 @@
+{
+  "schema": "no-fs-agent.product-proof.v0",
+  "task": "In src/limits.ts, change export const MAX_DRAFT_FILES = 20; to export const MAX_DRAFT_FILES = 21;. Change nothing else. Read the file first, make the edit, inspect the diff, commit, then done.",
+  "source_files": [
+    {
+      "path": "src/limits.ts",
+      "sha256": "f1f986bf94ca066e4b6475051a7de3a0fdb54a5f9fd9018efc6ac97c821f17b4"
+    }
+  ],
+  "proposal": {
+    "schema": "no-fs-agent.receipt.v0",
+    "scenario": "user-task",
+    "workerVersion": "no-fs-agent@0.4.0",
+    "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "verdict": "proposed",
+    "stopReason": "done",
+    "turns": 5,
+    "commits": [
+      {
+        "id": "c5fb1ecbf8cdb",
+        "message": "Increased MAX_DRAFT_FILES from 20 to 21"
+      }
+    ],
+    "primaryFile": "src/limits.ts",
+    "primarySha": "5fb1ecbf8cdb",
+    "diffs": [
+      {
+        "path": "src/limits.ts",
+        "before": "export const MAX_DRAFT_FILES = 20;\nexport const MAX_DRAFT_WRITABLE_FILES = 8;\nexport const MAX_DRAFT_BYTES = 120_000;\n",
+        "after": "export const MAX_DRAFT_FILES = 21;\nexport const MAX_DRAFT_WRITABLE_FILES = 8;\nexport const MAX_DRAFT_BYTES = 120_000;\n"
+      }
+    ],
+    "verbsLog": [
+      {
+        "turn": 1,
+        "verb": "read",
+        "ok": true
+      },
+      {
+        "turn": 2,
+        "verb": "write",
+        "ok": true
+      },
+      {
+        "turn": 3,
+        "verb": "diff",
+        "ok": true
+      },
+      {
+        "turn": 4,
+        "verb": "commit",
+        "ok": true
+      },
+      {
+        "turn": 5,
+        "verb": "done",
+        "ok": true
+      }
+    ],
+    "capabilities": {
+      "filesystem": false,
+      "subprocess": false,
+      "node": false
+    },
+    "grants": {
+      "writable": [
+        "src/limits.ts"
+      ]
+    },
+    "notes": [
+      "Agent acted only through six verbs against an in-memory tree.",
+      "Verdict comes from a frozen verifier outside the agent loop; the agent's own claims are ignored.",
+      "Proves nothing about durability across requests, git remotes, or mcpu-grade grants."
+    ]
+  },
+  "check": {
+    "passed": true,
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "verdict": "passed",
+  "apply_after_source_change": "refused"
+}

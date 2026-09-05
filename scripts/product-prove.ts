@@ -23,6 +23,7 @@ function fail(message: string): never {
 
 const runKey = process.env.NO_FS_RUN_KEY;
 if (!runKey) fail("Set NO_FS_RUN_KEY before running the product proof.");
+const endpoint = process.env.NO_FS_AGENT_ENDPOINT ?? "https://no-fs-agent.coy.workers.dev";
 
 const sourceRoot = process.cwd();
 const worktree = join(tmpdir(), `no-fs-agent-product-proof-${crypto.randomUUID()}`);
@@ -39,6 +40,8 @@ try {
       "try",
       "--task",
       task,
+      "--endpoint",
+      endpoint,
       "--read",
       "src/limits.ts",
       "--write",
