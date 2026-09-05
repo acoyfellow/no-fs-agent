@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,13 +10,17 @@ async function run(command: string[], cwd: string, env = process.env) {
   return { stdout, stderr, exitCode };
 }
 
-function output(stages: Stage[]) {
-  process.stdout.write(`${JSON.stringify({ schema: "no-fs-agent.live-install-proof.v0", verdict: stages.every((stage) => stage.ok) ? "passed" : "failed", stages }, null, 2)}\n`);
+async function output(stages: Stage[]) {
+  const receipt = { schema: "no-fs-agent.live-install-proof.v0", verdict: stages.every((stage) => stage.ok) ? "passed" : "failed", stages: stages.map(({ name, ok }) => ({ name, ok })) };
+  await mkdir(join(root, ".no-fs-agent"), { recursive: true });
+  await Bun.write(join(root, ".no-fs-agent", "live-install-receipt.json"), JSON.stringify(receipt, null, 2));
+  process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
 }
 
 const root = join(import.meta.dir, "..");
-const accountId = process.env.NO_FS_INSTALL_PROOF_ACCOUNT_ID;
-const workersSubdomain = process.env.NO_FS_INSTALL_PROOF_WORKERS_SUBDOMAIN;
+const localProofConfig = await Bun.file(join(root, ".no-fs-agent", "live-install.json")).json().catch(() => ({})) as { accountId?: string; workersSubdomain?: string };
+const accountId = process.env.NO_FS_INSTALL_PROOF_ACCOUNT_ID ?? localProofConfig.accountId;
+const workersSubdomain = process.env.NO_FS_INSTALL_PROOF_WORKERS_SUBDOMAIN ?? localProofConfig.workersSubdomain;
 const name = `no-fs-agent-install-proof-${crypto.randomUUID().slice(0, 8)}`;
 const sandbox = await mkdtemp(join(tmpdir(), "no-fs-agent-live-install-"));
 const repo = join(sandbox, "repo");
@@ -80,5 +84,5 @@ try {
   await rm(sandbox, { recursive: true, force: true });
 }
 
-output(stages);
+await output(stages);
 if (!stages.every((stage) => stage.ok)) process.exit(1);
