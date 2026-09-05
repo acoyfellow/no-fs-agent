@@ -1,0 +1,45 @@
+README.md
+  s_4f3d73861137de::t_dd92b3c4ef0f3f 9,11-15,18-20,23-27,31,48
+package.json
+  s_4f3d73861137de::t_6f388d687fd8b8 5-7,14-15
+proof/product-self-run.json
+  s_a22615f23a4e42::t_80d0373a389ff2 11
+scripts/cli.ts
+  s_4f3d73861137de::t_9c81b8f3eae7c4 1,3,41-44,46,53-75,196-200,208,217,224,233,243-254,278-279,281
+scripts/install-prove.ts
+  s_99b55ecf7d26fa::t_684c4b76a1226c 1-43
+src/worker.ts
+  s_99b55ecf7d26fa::t_3d6213f4e254ae 468-469
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8d1e1e0b34fc2302fe798015c6fdfe1225a4583e",
+  "prompts": {},
+  "sessions": {
+    "s_4f3d73861137de": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019febf7-4b34-7b21-970a-5f277fcc20a8",
+        "model": "kimi-k3"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    },
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    },
+    "s_a22615f23a4e42": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a04e55-f85f-7675-a279-2b25f324188f",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
